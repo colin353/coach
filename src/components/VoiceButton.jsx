@@ -42,13 +42,10 @@ export function VoiceButton({ isListening, isSpeaking, isLoading, onClick, disab
 
   return (
     <div className="relative">
-      {state === 'listening' && (
-        <div className="absolute inset-0 rounded-full bg-red-500 animate-pulse-ring" />
-      )}
       <button
         onClick={onClick}
         disabled={disabled || state === 'loading'}
-        className={`relative w-20 h-20 rounded-full ${stateStyles[state]} text-white flex items-center justify-center transition-all shadow-lg disabled:opacity-50`}
+        className={`relative w-20 h-20 rounded-full ${stateStyles[state]} text-white flex items-center justify-center shadow-lg disabled:opacity-50`}
       >
         {stateIcons[state]}
       </button>

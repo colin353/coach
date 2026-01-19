@@ -7,6 +7,7 @@ import { VoiceButton } from './components/VoiceButton';
 import { WorkspaceSelector } from './components/WorkspaceSelector';
 import { SessionSummary } from './components/SessionSummary';
 import { PresentationRecorder } from './components/PresentationRecorder';
+import { Scratchpad } from './components/Scratchpad';
 
 export default function App() {
   const [workspaces, setWorkspaces] = useState([]);
@@ -21,6 +22,8 @@ export default function App() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [activePresentation, setActivePresentation] = useState(null);
+  const [scratchpad, setScratchpad] = useState(null);
+  const [showScratchpad, setShowScratchpad] = useState(true);
   const messagesEndRef = useRef(null);
 
   const { isSpeaking, speak, queueSentence, stop: stopSpeaking } = useSpeechSynthesis();
@@ -100,6 +103,7 @@ export default function App() {
     setCurrentSessionId(session.id);
     setCurrentSession(session);
     setMessages([]);
+    setScratchpad(null);
     setPendingText('');
   };
 
@@ -109,6 +113,8 @@ export default function App() {
     setCurrentSessionId(sessionId);
     setCurrentSession(data);
     setMessages(data.messages || []);
+    setScratchpad(data.scratchpad || null);
+    setShowScratchpad(true);
     setPendingText('');
   };
 
@@ -232,6 +238,14 @@ export default function App() {
                 }
               }
               
+              // Handle scratchpad tools
+              if (data.tool === 'write_scratchpad' || data.tool === 'edit_scratchpad') {
+                if (data.status === 'completed' && data.result?.scratchpad !== undefined) {
+                  setScratchpad(data.result.scratchpad);
+                  setShowScratchpad(true);
+                }
+              }
+              
               if (data.error) {
                 console.error('Stream error:', data.error);
               }
@@ -333,40 +347,52 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main chat area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">AI Career Coach</h1>
-            <p className="text-sm text-slate-400">Your personal career development partner</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {currentSessionId && (
-              <button
-                onClick={discardSession}
-                className="text-slate-400 hover:text-red-400 p-2 text-sm transition-colors"
-                title="Discard session"
-              >
-                🗑️
-              </button>
-            )}
-            {currentSessionId && messages.length > 0 && currentSession?.completed !== 1 && (
-              <button
-                onClick={completeSession}
-                disabled={isCompleting}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:opacity-50 text-white rounded-lg py-2 px-4 text-sm font-medium transition-colors"
-              >
-                {isCompleting ? 'Completing...' : '✓ Complete Session'}
-              </button>
-            )}
-            {currentSession?.completed === 1 && (
-              <span className="text-green-400 text-sm flex items-center gap-1">
-                ✓ Completed
-              </span>
-            )}
-          </div>
-        </header>
+      {/* Main content area with chat and scratchpad */}
+      <div className="flex-1 flex">
+        {/* Chat area */}
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <header className="bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-semibold">AI Career Coach</h1>
+              <p className="text-sm text-slate-400">Your personal career development partner</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Scratchpad toggle button */}
+              {scratchpad && !showScratchpad && (
+                <button
+                  onClick={() => setShowScratchpad(true)}
+                  className="text-slate-400 hover:text-white p-2 text-sm transition-colors"
+                  title="Show scratchpad"
+                >
+                  📝
+                </button>
+              )}
+              {currentSessionId && (
+                <button
+                  onClick={discardSession}
+                  className="text-slate-400 hover:text-red-400 p-2 text-sm transition-colors"
+                  title="Discard session"
+                >
+                  🗑️
+                </button>
+              )}
+              {currentSessionId && messages.length > 0 && currentSession?.completed !== 1 && (
+                <button
+                  onClick={completeSession}
+                  disabled={isCompleting}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:opacity-50 text-white rounded-lg py-2 px-4 text-sm font-medium transition-colors"
+                >
+                  {isCompleting ? 'Completing...' : '✓ Complete Session'}
+                </button>
+              )}
+              {currentSession?.completed === 1 && (
+                <span className="text-green-400 text-sm flex items-center gap-1">
+                  ✓ Completed
+                </span>
+              )}
+            </div>
+          </header>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4">
@@ -430,6 +456,15 @@ export default function App() {
               </div>
             )}
           </div>
+        )}
+        </div>
+
+        {/* Scratchpad Panel */}
+        {scratchpad && showScratchpad && (
+          <Scratchpad 
+            content={scratchpad} 
+            onClose={() => setShowScratchpad(false)} 
+          />
         )}
       </div>
 

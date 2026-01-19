@@ -139,6 +139,32 @@ function executeStartPresentationPractice(sessionId, args) {
   return { presentation };
 }
 
+// Write to scratchpad - creates or overwrites
+function executeWriteScratchpad(sessionId, args) {
+  const { content } = args;
+  
+  db.prepare('UPDATE sessions SET scratchpad = ? WHERE id = ?').run(content, sessionId);
+  
+  return { scratchpad: content };
+}
+
+// Edit scratchpad - string replace
+function executeEditScratchpad(sessionId, args) {
+  const { old_str, new_str } = args;
+  
+  const session = db.prepare('SELECT scratchpad FROM sessions WHERE id = ?').get(sessionId);
+  const currentContent = session?.scratchpad || '';
+  
+  if (!currentContent.includes(old_str)) {
+    return { error: 'String not found in scratchpad', scratchpad: currentContent };
+  }
+  
+  const newContent = currentContent.replace(old_str, new_str);
+  db.prepare('UPDATE sessions SET scratchpad = ? WHERE id = ?').run(newContent, sessionId);
+  
+  return { scratchpad: newContent };
+}
+
 // Tool executor dispatcher
 export async function executeTool(toolName, args, sessionId) {
   switch (toolName) {
@@ -146,6 +172,10 @@ export async function executeTool(toolName, args, sessionId) {
       return executeCompleteSession(sessionId);
     case 'start_presentation_practice':
       return executeStartPresentationPractice(sessionId, args);
+    case 'write_scratchpad':
+      return executeWriteScratchpad(sessionId, args);
+    case 'edit_scratchpad':
+      return executeEditScratchpad(sessionId, args);
     default:
       return { error: `Unknown tool: ${toolName}` };
   }

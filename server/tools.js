@@ -29,6 +29,44 @@ export const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'write_scratchpad',
+      description: 'Write content to the session scratchpad. This creates or overwrites the scratchpad with markdown content. Use this to create tables, lists, diagrams, or structured notes that help organize thoughts during the conversation. Examples: SWOT analysis, pros/cons lists, financial projections, action item lists, comparison tables.',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: {
+            type: 'string',
+            description: 'The markdown content to write to the scratchpad. Use proper markdown formatting for tables, lists, headers, etc.',
+          },
+        },
+        required: ['content'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'edit_scratchpad',
+      description: 'Edit the session scratchpad by replacing a specific string with new content. Use this to update or modify existing scratchpad content without rewriting everything.',
+      parameters: {
+        type: 'object',
+        properties: {
+          old_str: {
+            type: 'string',
+            description: 'The exact string to find and replace in the scratchpad.',
+          },
+          new_str: {
+            type: 'string',
+            description: 'The new string to replace the old string with.',
+          },
+        },
+        required: ['old_str', 'new_str'],
+      },
+    },
+  },
 ];
 
 // Tool descriptions for system prompt
@@ -62,6 +100,24 @@ You can proactively suggest this tool if the conversation involves:
 - Practicing for job interviews
 - Improving public speaking skills
 - Rehearsing for a meeting
+
+### write_scratchpad / edit_scratchpad
+Use the scratchpad to create visual, structured content that helps organize the conversation:
+- **SWOT analysis**: Create a 2x2 table for Strengths, Weaknesses, Opportunities, Threats
+- **Pros/Cons lists**: Side-by-side comparison when weighing decisions
+- **Financial projections**: Tables with numbers, revenue forecasts, etc.
+- **Action items**: Checkbox lists of next steps
+- **Comparison tables**: When evaluating multiple options
+- **Timelines**: Structured plans with dates/milestones
+
+**IMPORTANT**: Once a scratchpad exists, ALWAYS prefer edit_scratchpad over write_scratchpad.
+- Use write_scratchpad ONLY for the initial creation
+- Use edit_scratchpad for ALL updates, additions, or modifications
+- edit_scratchpad preserves context and shows incremental progress
+- Overwriting with write_scratchpad loses the collaborative feel
+
+The scratchpad appears in a panel next to the chat - use it when visual structure adds value.
+Don't announce you're using the scratchpad, just use it naturally when helpful.
 
 Do NOT announce that you're using a tool or ask for confirmation. Just do it naturally.
 `;

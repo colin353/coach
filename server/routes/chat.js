@@ -16,9 +16,10 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'sessionId and message required' });
   }
 
-  // Get current session to find workspace
-  const currentSession = db.prepare('SELECT workspace_id FROM sessions WHERE id = ?').get(sessionId);
+  // Get current session to find workspace and scratchpad
+  const currentSession = db.prepare('SELECT workspace_id, scratchpad FROM sessions WHERE id = ?').get(sessionId);
   const workspaceId = currentSession?.workspace_id;
+  const scratchpad = currentSession?.scratchpad;
 
   // Save user message
   const userMsgId = uuid();
@@ -63,7 +64,18 @@ router.post('/', async (req, res) => {
         LIMIT 30
       `).all();
 
-  const systemPrompt = buildSystemPrompt(previousSessions, facts);
+  let systemPrompt = buildSystemPrompt(previousSessions, facts);
+  
+  // Add current scratchpad content to context
+  if (scratchpad) {
+    systemPrompt += `\n\n## Current Scratchpad Contents
+The scratchpad currently contains the following content. Use edit_scratchpad to modify it (do NOT overwrite with write_scratchpad):
+
+\`\`\`markdown
+${scratchpad}
+\`\`\`
+`;
+  }
 
   // Build messages array for Claude
   // Transform presentation_feedback messages into assistant messages with context

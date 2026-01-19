@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import * as tts from '@diffusionstudio/vits-web';
 
 const VOICE_ID = 'en_US-hfc_female-medium';
-const PAUSE_MS = 600; // milliseconds for <PAUSE>
+const PAUSE_MS = 300; // milliseconds for <PAUSE>
 
 // Strip markdown and extract pauses
 function preprocessText(text) {

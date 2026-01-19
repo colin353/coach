@@ -73,4 +73,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_presentations_session ON presentations(session_id);
 `);
 
+// Add scratchpad column
+try {
+  db.exec('ALTER TABLE sessions ADD COLUMN scratchpad TEXT');
+} catch (e) {}
+
 export default db;

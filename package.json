@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "@diffusionstudio/vits-web": "^1.0.3",
+    "@tailwindcss/typography": "^0.5.19",
     "better-sqlite3": "^11.0.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "react-markdown": "^10.1.0",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
