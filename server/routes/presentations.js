@@ -187,6 +187,14 @@ Provide at least 5-10 pieces of timestamped feedback, more for longer presentati
     `).run(JSON.stringify(feedback), id);
 
     const updated = db.prepare('SELECT * FROM presentations WHERE id = ?').get(id);
+    
+    // Save feedback as a message in the chat history
+    const messageId = uuid();
+    const messageContent = JSON.stringify(updated);
+    db.prepare(
+      'INSERT INTO messages (id, session_id, role, content) VALUES (?, ?, ?, ?)'
+    ).run(messageId, presentation.session_id, 'presentation_feedback', messageContent);
+
     res.json(updated);
   } catch (error) {
     console.error('Analysis error:', error);

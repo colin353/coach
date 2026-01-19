@@ -7,7 +7,6 @@ import { VoiceButton } from './components/VoiceButton';
 import { WorkspaceSelector } from './components/WorkspaceSelector';
 import { SessionSummary } from './components/SessionSummary';
 import { PresentationRecorder } from './components/PresentationRecorder';
-import { PresentationReview } from './components/PresentationReview';
 
 export default function App() {
   const [workspaces, setWorkspaces] = useState([]);
@@ -22,7 +21,6 @@ export default function App() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [activePresentation, setActivePresentation] = useState(null);
-  const [reviewPresentation, setReviewPresentation] = useState(null);
   const messagesEndRef = useRef(null);
 
   const { isSpeaking, speak, queueSentence, stop: stopSpeaking } = useSpeechSynthesis();
@@ -441,17 +439,13 @@ export default function App() {
           presentation={activePresentation}
           onComplete={(result) => {
             setActivePresentation(null);
-            setReviewPresentation(result);
+            // Add the feedback as a message in the chat
+            setMessages((prev) => [...prev, { 
+              role: 'presentation_feedback', 
+              content: JSON.stringify(result) 
+            }]);
           }}
           onCancel={() => setActivePresentation(null)}
-        />
-      )}
-
-      {/* Presentation Review Modal */}
-      {reviewPresentation && (
-        <PresentationReview
-          presentation={reviewPresentation}
-          onClose={() => setReviewPresentation(null)}
         />
       )}
     </div>

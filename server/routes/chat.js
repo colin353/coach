@@ -66,10 +66,42 @@ router.post('/', async (req, res) => {
   const systemPrompt = buildSystemPrompt(previousSessions, facts);
 
   // Build messages array for Claude
-  const messages = history.map(m => ({
-    role: m.role,
-    content: m.content,
-  }));
+  // Transform presentation_feedback messages into assistant messages with context
+  const messages = history.map(m => {
+    if (m.role === 'presentation_feedback') {
+      // Parse presentation feedback and format as context for Claude
+      try {
+        const presentation = JSON.parse(m.content);
+        const feedback = typeof presentation.feedback === 'string' 
+          ? JSON.parse(presentation.feedback) 
+          : presentation.feedback;
+        
+        return {
+          role: 'assistant',
+          content: `[Presentation Practice Completed: "${presentation.title}"]
+
+The user just recorded a presentation and received the following feedback:
+
+Overall Score: ${feedback.overall_score}/10
+Summary: ${feedback.summary}
+
+Key Improvements Needed:
+${feedback.key_improvements?.map((imp, i) => `${i + 1}. ${imp}`).join('\n') || 'None specified'}
+
+Detailed Feedback:
+${feedback.feedback?.map(f => `- [${f.timestamp}] (${f.category}, ${f.type}): ${f.message}`).join('\n') || 'None'}
+
+You can now discuss this feedback with the user, offer encouragement, or help them work on specific areas.`,
+        };
+      } catch (e) {
+        return { role: 'assistant', content: '[Presentation feedback - parsing error]' };
+      }
+    }
+    return {
+      role: m.role,
+      content: m.content,
+    };
+  });
 
   // Set up SSE
   res.setHeader('Content-Type', 'text/event-stream');

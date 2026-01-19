@@ -1,5 +1,17 @@
+import { PresentationFeedbackMessage } from './PresentationFeedbackMessage';
+
 export function ChatMessage({ message, isLatest }) {
   const isUser = message.role === 'user';
+  
+  // Check if this is a presentation feedback message
+  if (message.role === 'presentation_feedback') {
+    try {
+      const presentation = JSON.parse(message.content);
+      return <PresentationFeedbackMessage presentation={presentation} />;
+    } catch (e) {
+      console.error('Failed to parse presentation feedback:', e);
+    }
+  }
   
   // Clean up display text (remove PAUSE markers)
   const displayContent = message.content.replace(/<PAUSE>/gi, '');
