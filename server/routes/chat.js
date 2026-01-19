@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
-import { COACH_SYSTEM_PROMPT, buildContextPrompt, buildFactsPrompt } from '../prompts.js';
+import { buildSystemPrompt } from '../prompts.js';
+import { TOOLS } from '../tools.js';
+import { executeTool } from '../toolExecutor.js';
 
 const router = Router();
 
@@ -61,7 +63,7 @@ router.post('/', async (req, res) => {
         LIMIT 30
       `).all();
 
-  const systemPrompt = COACH_SYSTEM_PROMPT + buildContextPrompt(previousSessions) + buildFactsPrompt(facts);
+  const systemPrompt = buildSystemPrompt(previousSessions, facts);
 
   // Build messages array for Claude
   const messages = history.map(m => ({
@@ -88,6 +90,7 @@ router.post('/', async (req, res) => {
           { role: 'system', content: systemPrompt },
           ...messages,
         ],
+        tools: TOOLS,
         stream: true,
         max_tokens: 1024,
       }),
@@ -103,6 +106,8 @@ router.post('/', async (req, res) => {
 
     let fullContent = '';
     let buffer = '';
+    let toolCalls = [];
+    let currentToolCall = null;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
 
@@ -123,10 +128,34 @@ router.post('/', async (req, res) => {
 
           try {
             const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              fullContent += content;
-              res.write(`data: ${JSON.stringify({ content })}\n\n`);
+            const delta = parsed.choices?.[0]?.delta;
+            
+            // Handle text content
+            if (delta?.content) {
+              fullContent += delta.content;
+              res.write(`data: ${JSON.stringify({ content: delta.content })}\n\n`);
+            }
+            
+            // Handle tool calls
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                if (tc.index !== undefined) {
+                  // Initialize or get existing tool call
+                  if (!toolCalls[tc.index]) {
+                    toolCalls[tc.index] = { id: '', name: '', arguments: '' };
+                  }
+                  currentToolCall = toolCalls[tc.index];
+                }
+                if (tc.id) {
+                  currentToolCall.id = tc.id;
+                }
+                if (tc.function?.name) {
+                  currentToolCall.name = tc.function.name;
+                }
+                if (tc.function?.arguments) {
+                  currentToolCall.arguments += tc.function.arguments;
+                }
+              }
             }
           } catch (e) {
             // Skip unparseable chunks
@@ -135,13 +164,40 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Save assistant message
-    const assistantMsgId = uuid();
-    db.prepare(
-      'INSERT INTO messages (id, session_id, role, content) VALUES (?, ?, ?, ?)'
-    ).run(assistantMsgId, sessionId, 'assistant', fullContent);
+    // Save assistant message (text content only)
+    if (fullContent) {
+      const assistantMsgId = uuid();
+      db.prepare(
+        'INSERT INTO messages (id, session_id, role, content) VALUES (?, ?, ?, ?)'
+      ).run(assistantMsgId, sessionId, 'assistant', fullContent);
+    }
 
+    // Signal that text is done
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+
+    // Execute any tool calls
+    const validToolCalls = toolCalls.filter(tc => tc && tc.name);
+    
+    for (const toolCall of validToolCalls) {
+      let args = {};
+      try {
+        if (toolCall.arguments) {
+          args = JSON.parse(toolCall.arguments);
+        }
+      } catch (e) {
+        console.error('Failed to parse tool arguments:', toolCall.arguments);
+      }
+
+      // Signal that we're executing a tool
+      res.write(`data: ${JSON.stringify({ tool: toolCall.name, status: 'executing' })}\n\n`);
+
+      // Execute the tool
+      const result = await executeTool(toolCall.name, args, sessionId);
+
+      // Send tool result
+      res.write(`data: ${JSON.stringify({ tool: toolCall.name, status: 'completed', result })}\n\n`);
+    }
+
     res.end();
   } catch (error) {
     console.error('Chat error:', error);

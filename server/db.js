@@ -56,4 +56,21 @@ try {
   db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_workspace ON sessions(workspace_id)');
 } catch (e) {}
 
+// Create presentations table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS presentations (
+    id TEXT PRIMARY KEY,
+    session_id TEXT REFERENCES sessions(id),
+    title TEXT,
+    audio_path TEXT,
+    video_path TEXT,
+    duration_seconds REAL,
+    feedback TEXT,
+    status TEXT DEFAULT 'recording',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_presentations_session ON presentations(session_id);
+`);
+
 export default db;

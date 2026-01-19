@@ -6,6 +6,8 @@ import { SessionList } from './components/SessionList';
 import { VoiceButton } from './components/VoiceButton';
 import { WorkspaceSelector } from './components/WorkspaceSelector';
 import { SessionSummary } from './components/SessionSummary';
+import { PresentationRecorder } from './components/PresentationRecorder';
+import { PresentationReview } from './components/PresentationReview';
 
 export default function App() {
   const [workspaces, setWorkspaces] = useState([]);
@@ -19,6 +21,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [activePresentation, setActivePresentation] = useState(null);
+  const [reviewPresentation, setReviewPresentation] = useState(null);
   const messagesEndRef = useRef(null);
 
   const { isSpeaking, speak, queueSentence, stop: stopSpeaking } = useSpeechSynthesis();
@@ -203,9 +207,33 @@ export default function App() {
                 if (remaining) {
                   queueSentence(remaining);
                 }
-                setMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
+                if (fullContent) {
+                  setMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
+                }
                 setStreamingContent('');
               }
+              
+              // Handle tool execution
+              if (data.tool === 'complete_session') {
+                if (data.status === 'executing') {
+                  setIsCompleting(true);
+                } else if (data.status === 'completed' && data.result?.session) {
+                  // Update session with completion data
+                  setCurrentSession(data.result.session);
+                  setSessions(prev => prev.map(s => 
+                    s.id === currentSessionId ? { ...s, ...data.result.session } : s
+                  ));
+                  setIsCompleting(false);
+                }
+              }
+              
+              // Handle presentation practice tool
+              if (data.tool === 'start_presentation_practice') {
+                if (data.status === 'completed' && data.result?.presentation) {
+                  setActivePresentation(data.result.presentation);
+                }
+              }
+              
               if (data.error) {
                 console.error('Stream error:', data.error);
               }
@@ -406,6 +434,26 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Presentation Recorder Modal */}
+      {activePresentation && (
+        <PresentationRecorder
+          presentation={activePresentation}
+          onComplete={(result) => {
+            setActivePresentation(null);
+            setReviewPresentation(result);
+          }}
+          onCancel={() => setActivePresentation(null)}
+        />
+      )}
+
+      {/* Presentation Review Modal */}
+      {reviewPresentation && (
+        <PresentationReview
+          presentation={reviewPresentation}
+          onClose={() => setReviewPresentation(null)}
+        />
+      )}
     </div>
   );
 }

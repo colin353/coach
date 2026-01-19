@@ -13,6 +13,9 @@ dist/
 data/*.db
 data/*.db-journal
 
+# Recordings
+data/recordings/
+
 # Logs
 *.log
 npm-debug.log*

@@ -38,6 +38,16 @@ Don't overuse it - just where a real person would naturally pause.
 
 You're a thinking partner, not a question machine.`;
 
+import { TOOLS_PROMPT } from './tools.js';
+
+export function buildSystemPrompt(previousSessions, facts) {
+  let prompt = COACH_SYSTEM_PROMPT;
+  prompt += TOOLS_PROMPT;
+  prompt += buildContextPrompt(previousSessions);
+  prompt += buildFactsPrompt(facts);
+  return prompt;
+}
+
 export function buildContextPrompt(previousSessions) {
   if (!previousSessions || previousSessions.length === 0) {
     return '';
