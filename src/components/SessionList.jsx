@@ -24,7 +24,12 @@ export function SessionList({ sessions, currentSessionId, onSelectSession, onNew
                 currentSessionId === session.id ? 'bg-slate-700' : ''
               }`}
             >
-              <div className="font-medium text-sm truncate">{session.title}</div>
+              <div className="flex items-center gap-2">
+                {session.completed === 1 && (
+                  <span className="text-green-400 text-xs">✓</span>
+                )}
+                <span className="font-medium text-sm truncate flex-1">{session.title}</span>
+              </div>
               <div className="text-xs text-slate-500 mt-1">
                 {new Date(session.started_at).toLocaleDateString()}
                 {session.message_count > 0 && ` · ${session.message_count} messages`}

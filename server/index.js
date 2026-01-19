@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import sessionsRouter from './routes/sessions.js';
 import chatRouter from './routes/chat.js';
+import workspacesRouter from './routes/workspaces.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -13,6 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 // API routes
+app.use('/api/workspaces', workspacesRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/chat', chatRouter);
 

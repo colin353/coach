@@ -4,14 +4,20 @@ import { useSpeechSynthesis } from './hooks/useSpeechSynthesis';
 import { ChatMessage } from './components/ChatMessage';
 import { SessionList } from './components/SessionList';
 import { VoiceButton } from './components/VoiceButton';
+import { WorkspaceSelector } from './components/WorkspaceSelector';
+import { SessionSummary } from './components/SessionSummary';
 
 export default function App() {
+  const [workspaces, setWorkspaces] = useState([]);
+  const [currentWorkspace, setCurrentWorkspace] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [currentSession, setCurrentSession] = useState(null);
   const [messages, setMessages] = useState([]);
   const [interimText, setInterimText] = useState('');
   const [pendingText, setPendingText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const messagesEndRef = useRef(null);
 
@@ -36,31 +42,61 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  // Load sessions on mount
+  // Load workspaces on mount
+  useEffect(() => {
+    fetchWorkspaces();
+  }, []);
+
+  // Load sessions when workspace changes
   useEffect(() => {
     fetchSessions();
-  }, []);
+    // Clear current session when switching workspaces
+    setCurrentSessionId(null);
+    setCurrentSession(null);
+    setMessages([]);
+  }, [currentWorkspace]);
 
   // Load voices
   useEffect(() => {
     window.speechSynthesis.getVoices();
   }, []);
 
+  const fetchWorkspaces = async () => {
+    const res = await fetch('/api/workspaces');
+    const data = await res.json();
+    setWorkspaces(data);
+  };
+
   const fetchSessions = async () => {
-    const res = await fetch('/api/sessions');
+    const url = currentWorkspace 
+      ? `/api/sessions?workspaceId=${currentWorkspace.id}`
+      : '/api/sessions';
+    const res = await fetch(url);
     const data = await res.json();
     setSessions(data);
+  };
+
+  const createWorkspace = async (name) => {
+    const res = await fetch('/api/workspaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const workspace = await res.json();
+    setWorkspaces((prev) => [workspace, ...prev]);
+    setCurrentWorkspace(workspace);
   };
 
   const createNewSession = async () => {
     const res = await fetch('/api/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ workspaceId: currentWorkspace?.id }),
     });
     const session = await res.json();
     setSessions((prev) => [session, ...prev]);
     setCurrentSessionId(session.id);
+    setCurrentSession(session);
     setMessages([]);
     setPendingText('');
   };
@@ -69,8 +105,49 @@ export default function App() {
     const res = await fetch(`/api/sessions/${sessionId}`);
     const data = await res.json();
     setCurrentSessionId(sessionId);
+    setCurrentSession(data);
     setMessages(data.messages || []);
     setPendingText('');
+  };
+
+  const completeSession = async () => {
+    if (!currentSessionId || isCompleting) return;
+    
+    setIsCompleting(true);
+    try {
+      const res = await fetch(`/api/sessions/${currentSessionId}/complete`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      
+      if (data.session) {
+        setCurrentSession(data.session);
+        // Update session in the list
+        setSessions(prev => prev.map(s => 
+          s.id === currentSessionId ? { ...s, ...data.session } : s
+        ));
+      }
+    } catch (error) {
+      console.error('Complete session error:', error);
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
+  const discardSession = async () => {
+    if (!currentSessionId) return;
+    
+    if (!confirm('Discard this session? This cannot be undone.')) return;
+    
+    try {
+      await fetch(`/api/sessions/${currentSessionId}`, { method: 'DELETE' });
+      setSessions(prev => prev.filter(s => s.id !== currentSessionId));
+      setCurrentSessionId(null);
+      setCurrentSession(null);
+      setMessages([]);
+    } catch (error) {
+      console.error('Discard session error:', error);
+    }
   };
 
   const sendMessage = async (text) => {
@@ -177,19 +254,92 @@ export default function App() {
   return (
     <div className="h-screen flex">
       {/* Sidebar */}
-      <SessionList
-        sessions={sessions}
-        currentSessionId={currentSessionId}
-        onSelectSession={loadSession}
-        onNewSession={createNewSession}
-      />
+      <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
+        {/* Workspace Selector */}
+        <div className="p-3 border-b border-slate-700">
+          <WorkspaceSelector
+            workspaces={workspaces}
+            currentWorkspace={currentWorkspace}
+            onSelectWorkspace={setCurrentWorkspace}
+            onCreateWorkspace={createWorkspace}
+          />
+        </div>
+        
+        {/* Session List */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-slate-700">
+            <button
+              onClick={createNewSession}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 px-4 font-medium transition-colors"
+            >
+              + New Session
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto">
+            {sessions.length === 0 ? (
+              <div className="p-4 text-slate-500 text-sm text-center">
+                No sessions yet
+              </div>
+            ) : (
+              sessions.map((session) => (
+                <button
+                  key={session.id}
+                  onClick={() => loadSession(session.id)}
+                  className={`w-full text-left p-4 border-b border-slate-700 hover:bg-slate-700 transition-colors ${
+                    currentSessionId === session.id ? 'bg-slate-700' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {session.completed === 1 && (
+                      <span className="text-green-400 text-xs">✓</span>
+                    )}
+                    <span className="font-medium text-sm truncate flex-1">{session.title}</span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {new Date(session.started_at).toLocaleDateString()}
+                    {session.message_count > 0 && ` · ${session.message_count} messages`}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="bg-slate-800 border-b border-slate-700 p-4">
-          <h1 className="text-xl font-semibold">AI Career Coach</h1>
-          <p className="text-sm text-slate-400">Your personal career development partner</p>
+        <header className="bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold">AI Career Coach</h1>
+            <p className="text-sm text-slate-400">Your personal career development partner</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {currentSessionId && (
+              <button
+                onClick={discardSession}
+                className="text-slate-400 hover:text-red-400 p-2 text-sm transition-colors"
+                title="Discard session"
+              >
+                🗑️
+              </button>
+            )}
+            {currentSessionId && messages.length > 0 && currentSession?.completed !== 1 && (
+              <button
+                onClick={completeSession}
+                disabled={isCompleting}
+                className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:opacity-50 text-white rounded-lg py-2 px-4 text-sm font-medium transition-colors"
+              >
+                {isCompleting ? 'Completing...' : '✓ Complete Session'}
+              </button>
+            )}
+            {currentSession?.completed === 1 && (
+              <span className="text-green-400 text-sm flex items-center gap-1">
+                ✓ Completed
+              </span>
+            )}
+          </div>
         </header>
 
         {/* Messages */}
@@ -218,38 +368,43 @@ export default function App() {
               {streamingContent && (
                 <ChatMessage message={{ role: 'assistant', content: streamingContent }} isLatest />
               )}
+              {currentSession?.completed === 1 && currentSession?.summary && (
+                <SessionSummary summary={currentSession.summary} />
+              )}
             </>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input area */}
-        <div className="border-t border-slate-700 bg-slate-800 p-6">
-          {/* Transcription preview */}
-          {displayText && (
-            <div className="mb-4 p-3 bg-slate-700 rounded-lg text-slate-300 min-h-[60px]">
-              {displayText}
-              {interimText && <span className="text-slate-500">|</span>}
-            </div>
-          )}
+        {/* Input area - hidden for completed sessions */}
+        {currentSession?.completed !== 1 && (
+          <div className="border-t border-slate-700 bg-slate-800 p-6">
+            {/* Transcription preview */}
+            {displayText && (
+              <div className="mb-4 p-3 bg-slate-700 rounded-lg text-slate-300 min-h-[60px]">
+                {displayText}
+                {interimText && <span className="text-slate-500">|</span>}
+              </div>
+            )}
 
-          {/* Voice button */}
-          <div className="flex justify-center">
-            <VoiceButton
-              isListening={isListening}
-              isSpeaking={isSpeaking}
-              isLoading={isLoading}
-              onClick={handleVoiceButtonClick}
-              disabled={!isSupported}
-            />
+            {/* Voice button */}
+            <div className="flex justify-center">
+              <VoiceButton
+                isListening={isListening}
+                isSpeaking={isSpeaking}
+                isLoading={isLoading}
+                onClick={handleVoiceButtonClick}
+                disabled={!isSupported}
+              />
+            </div>
+
+            {!isSupported && (
+              <div className="text-center text-red-400 mt-2 text-sm">
+                Speech recognition not supported in this browser
+              </div>
+            )}
           </div>
-
-          {!isSupported && (
-            <div className="text-center text-red-400 mt-2 text-sm">
-              Speech recognition not supported in this browser
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

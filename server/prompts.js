@@ -52,3 +52,17 @@ export function buildContextPrompt(previousSessions) {
 
   return `\n\n## Previous Session Context\nHere's what you've discussed in recent sessions:\n${summaries}\n\nUse this context naturally if relevant, but don't force it.`;
 }
+
+export function buildFactsPrompt(facts) {
+  if (!facts || facts.length === 0) {
+    return '';
+  }
+
+  const factsList = facts.map(f => `- ${f.content}`).join('\n');
+
+  return `\n\n## What You Know About This Person
+From previous conversations, you've learned:
+${factsList}
+
+Use this knowledge naturally. Don't explicitly mention "from our previous conversation" - just incorporate what you know.`;
+}

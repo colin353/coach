@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
-import { COACH_SYSTEM_PROMPT, buildContextPrompt } from '../prompts.js';
+import { COACH_SYSTEM_PROMPT, buildContextPrompt, buildFactsPrompt } from '../prompts.js';
 
 const router = Router();
 
@@ -14,6 +14,10 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'sessionId and message required' });
   }
 
+  // Get current session to find workspace
+  const currentSession = db.prepare('SELECT workspace_id FROM sessions WHERE id = ?').get(sessionId);
+  const workspaceId = currentSession?.workspace_id;
+
   // Save user message
   const userMsgId = uuid();
   db.prepare(
@@ -25,15 +29,39 @@ router.post('/', async (req, res) => {
     'SELECT role, content FROM messages WHERE session_id = ? ORDER BY created_at ASC'
   ).all(sessionId);
 
-  // Get context from previous sessions
-  const previousSessions = db.prepare(`
-    SELECT * FROM sessions 
-    WHERE id != ? AND summary IS NOT NULL
-    ORDER BY started_at DESC 
-    LIMIT 3
-  `).all(sessionId);
+  // Get context from previous sessions (same workspace only)
+  const previousSessions = workspaceId
+    ? db.prepare(`
+        SELECT * FROM sessions 
+        WHERE id != ? AND summary IS NOT NULL AND workspace_id = ?
+        ORDER BY started_at DESC 
+        LIMIT 3
+      `).all(sessionId, workspaceId)
+    : db.prepare(`
+        SELECT * FROM sessions 
+        WHERE id != ? AND summary IS NOT NULL AND workspace_id IS NULL
+        ORDER BY started_at DESC 
+        LIMIT 3
+      `).all(sessionId);
 
-  const systemPrompt = COACH_SYSTEM_PROMPT + buildContextPrompt(previousSessions);
+  // Get facts from completed sessions (same workspace only)
+  const facts = workspaceId
+    ? db.prepare(`
+        SELECT f.content FROM facts f
+        JOIN sessions s ON s.id = f.session_id
+        WHERE s.completed = 1 AND s.workspace_id = ?
+        ORDER BY f.created_at DESC
+        LIMIT 30
+      `).all(workspaceId)
+    : db.prepare(`
+        SELECT f.content FROM facts f
+        JOIN sessions s ON s.id = f.session_id
+        WHERE s.completed = 1 AND s.workspace_id IS NULL
+        ORDER BY f.created_at DESC
+        LIMIT 30
+      `).all();
+
+  const systemPrompt = COACH_SYSTEM_PROMPT + buildContextPrompt(previousSessions) + buildFactsPrompt(facts);
 
   // Build messages array for Claude
   const messages = history.map(m => ({
