@@ -110,19 +110,52 @@ router.post('/:id/analyze', async (req, res) => {
               {
                 text: `You are an expert presentation coach providing detailed, actionable feedback on a recorded presentation.
 
-Analyze this presentation audio and provide timestamped feedback. Focus on:
-- Clarity: Is the message clear? Are ideas well-structured?
-- Accuracy: Are claims supported? Any logical issues?
-- Engagement: Is the delivery compelling? Does it hold attention?
-- Pacing: Is the speed appropriate? Are there awkward pauses?
-- Filler words: Note excessive "um", "uh", "like", "you know"
-- Confidence: Does the speaker sound confident and authoritative?
+Analyze this presentation audio and provide:
+1. A rubric-based score breakdown (each category 1-10)
+2. Timestamped feedback throughout the presentation
+
+## Rubric Categories (score each 1-10):
+- **Clarity**: Is the message easy to understand? Clear explanations, no jargon confusion?
+- **Structure**: Logical flow, organization, clear intro/body/conclusion, smooth transitions?
+- **Delivery**: Pacing, vocal variety, minimal filler words (um, uh, like, you know)?
+- **Engagement**: Energy, storytelling, holds attention, compelling narrative?
+- **Confidence**: Assertive, conviction, composed, owns the room?
+- **Credibility**: Trustworthy, authoritative, claims well-supported, professional tone?
+
+## Timestamped Feedback Categories:
+clarity, structure, delivery, engagement, confidence, credibility
+
+## Filler Word Tracking:
+Count EVERY instance of filler words throughout the presentation. Common fillers include:
+- "um", "uh", "ah", "er"
+- "like" (when used as filler, not comparison)
+- "you know", "I mean", "basically", "actually", "literally"
+- "so" (when used to start sentences unnecessarily)
+- "right?", "okay?", "yeah?" (verbal tics)
 
 IMPORTANT: Maintain a ratio of approximately 90% constructive criticism to 10% positive feedback. Be direct and specific. The goal is improvement, not validation.
 
 Respond in this exact JSON format:
 {
-  "overall_score": 7.5,
+  "rubric": {
+    "clarity": { "score": 7, "summary": "Brief explanation of why this score" },
+    "structure": { "score": 6, "summary": "Brief explanation" },
+    "delivery": { "score": 8, "summary": "Brief explanation" },
+    "engagement": { "score": 5, "summary": "Brief explanation" },
+    "confidence": { "score": 7, "summary": "Brief explanation" },
+    "credibility": { "score": 6, "summary": "Brief explanation" }
+  },
+  "filler_words": {
+    "total": 23,
+    "breakdown": {
+      "um": 8,
+      "like": 7,
+      "you know": 5,
+      "so": 3
+    },
+    "per_minute": 4.6
+  },
+  "overall_score": 39,
   "summary": "Brief 2-3 sentence overall assessment",
   "feedback": [
     {
@@ -147,6 +180,9 @@ Respond in this exact JSON format:
   ]
 }
 
+The overall_score MUST be the sum of all 6 rubric scores (max 60).
+The filler_words.per_minute should be calculated based on presentation length.
+Include filler word impact in the delivery rubric summary.
 Provide at least 5-10 pieces of timestamped feedback, more for longer presentations. Be specific about what was said and how to improve it.`,
               },
             ],
