@@ -276,6 +276,15 @@ export default function App() {
       return;
     }
 
+    // If there's pending text and we're not listening, send it
+    const currentText = (pendingText + ' ' + interimText).trim();
+    if (!isListening && currentText) {
+      sendMessage(currentText);
+      setPendingText('');
+      setInterimText('');
+      return;
+    }
+
     if (isListening) {
       stopListening();
       // Small delay to capture any final speech recognition results
