@@ -32,9 +32,9 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,  // TODO: re-enable once X-Forwarded-Proto is configured in nginx
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'lax' : false,
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   },
 }));
@@ -52,6 +52,10 @@ app.get('/auth/google', passport.authenticate('google', {
 app.get('/auth/google/callback', 
   passport.authenticate('google', { failureRedirect: '/login?error=auth_failed' }),
   (req, res) => {
+    console.log('OAuth callback - user:', req.user);
+    console.log('OAuth callback - session:', req.session);
+    console.log('OAuth callback - sessionID:', req.sessionID);
+    
     // Check whitelist after successful auth
     if (!isEmailAllowed(req.user.email)) {
       req.logout(() => {
@@ -64,6 +68,7 @@ app.get('/auth/google/callback',
       if (err) {
         console.error('Session save error:', err);
       }
+      console.log('Session saved, redirecting...');
       res.redirect('/');
     });
   }
