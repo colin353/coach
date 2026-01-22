@@ -59,7 +59,13 @@ app.get('/auth/google/callback',
       });
       return;
     }
-    res.redirect('/');
+    // Explicitly save session before redirect
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+      }
+      res.redirect('/');
+    });
   }
 );
 
