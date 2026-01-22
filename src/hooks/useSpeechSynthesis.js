@@ -2,12 +2,10 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import * as tts from '@diffusionstudio/vits-web';
 
 const VOICE_ID = 'en_US-hfc_female-medium';
-const PAUSE_MS = 300; // milliseconds for <PAUSE>
 
-// Strip markdown and extract pauses
+// Strip markdown formatting
 function preprocessText(text) {
-  // Remove markdown formatting
-  let cleaned = text
+  return text
     .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold**
     .replace(/\*([^*]+)\*/g, '$1')       // *italic*
     .replace(/__([^_]+)__/g, '$1')       // __bold__
@@ -15,31 +13,8 @@ function preprocessText(text) {
     .replace(/`([^`]+)`/g, '$1')         // `code`
     .replace(/#{1,6}\s*/g, '')           // # headers
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [links](url)
-    .replace(/[*_~`]/g, '');             // stray markers
-
-  return cleaned;
-}
-
-// Split text into speakable segments (sentences + pause markers)
-function splitIntoSegments(text) {
-  const cleaned = preprocessText(text);
-  const segments = [];
-  
-  // Split on <PAUSE> first
-  const parts = cleaned.split(/<PAUSE>/gi);
-  
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i].trim();
-    if (part) {
-      segments.push({ type: 'speech', text: part });
-    }
-    // Add pause between parts (not after last)
-    if (i < parts.length - 1) {
-      segments.push({ type: 'pause', duration: PAUSE_MS });
-    }
-  }
-  
-  return segments;
+    .replace(/[*_~`]/g, '')              // stray markers
+    .replace(/<PAUSE>/gi, '');           // remove pause markers
 }
 
 // Split text into sentences for streaming
@@ -77,17 +52,12 @@ export function useSpeechSynthesis() {
     setIsSpeaking(true);
 
     while (queueRef.current.length > 0 && !abortRef.current) {
-      const segment = queueRef.current.shift();
-      
-      if (segment.type === 'pause') {
-        await new Promise(resolve => setTimeout(resolve, segment.duration));
-        continue;
-      }
+      const text = queueRef.current.shift();
 
       try {
         if (isModelReady) {
           const wav = await tts.predict({
-            text: segment.text,
+            text: text,
             voiceId: VOICE_ID,
           });
 
@@ -105,14 +75,14 @@ export function useSpeechSynthesis() {
         } else {
           // Fallback to browser TTS
           await new Promise((resolve) => {
-            const utterance = new SpeechSynthesisUtterance(segment.text);
+            const utterance = new SpeechSynthesisUtterance(text);
             utterance.onend = resolve;
             utterance.onerror = resolve;
             window.speechSynthesis.speak(utterance);
           });
         }
       } catch (error) {
-        console.error('TTS segment error:', error);
+        console.error('TTS error:', error);
       }
     }
 
@@ -123,9 +93,11 @@ export function useSpeechSynthesis() {
 
   // Queue a sentence for speaking (for streaming)
   const queueSentence = useCallback((sentence) => {
-    const segments = splitIntoSegments(sentence);
-    queueRef.current.push(...segments);
-    processQueue();
+    const cleaned = preprocessText(sentence);
+    if (cleaned.trim()) {
+      queueRef.current.push(cleaned);
+      processQueue();
+    }
   }, [processQueue]);
 
   // Speak full text at once
@@ -134,10 +106,7 @@ export function useSpeechSynthesis() {
     abortRef.current = false;
     
     const sentences = splitIntoSentences(text);
-    for (const sentence of sentences) {
-      const segments = splitIntoSegments(sentence);
-      queueRef.current.push(...segments);
-    }
+    queueRef.current.push(...sentences);
     
     processQueue();
   }, [processQueue]);
