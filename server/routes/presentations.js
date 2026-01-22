@@ -15,6 +15,13 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // Create a new presentation record
 router.post('/', (req, res) => {
   const { sessionId, title } = req.body;
+  const userId = req.user.id;
+  
+  // Verify session ownership
+  const session = db.prepare('SELECT user_id FROM sessions WHERE id = ?').get(sessionId);
+  if (!session || session.user_id !== userId) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
   
   const id = uuid();
   db.prepare(
@@ -25,12 +32,28 @@ router.post('/', (req, res) => {
   res.json(presentation);
 });
 
+// Helper to verify presentation ownership
+function verifyPresentationOwnership(presentationId, userId) {
+  const presentation = db.prepare(`
+    SELECT p.*, s.user_id 
+    FROM presentations p 
+    JOIN sessions s ON s.id = p.session_id 
+    WHERE p.id = ?
+  `).get(presentationId);
+  
+  if (!presentation || presentation.user_id !== userId) {
+    return null;
+  }
+  return presentation;
+}
+
 // Upload recording files
 router.post('/:id/upload', async (req, res) => {
   const { id } = req.params;
   const { audio, video, duration } = req.body;
+  const userId = req.user.id;
   
-  const presentation = db.prepare('SELECT * FROM presentations WHERE id = ?').get(id);
+  const presentation = verifyPresentationOwnership(id, userId);
   if (!presentation) {
     return res.status(404).json({ error: 'Presentation not found' });
   }
@@ -70,8 +93,9 @@ router.post('/:id/upload', async (req, res) => {
 // Analyze presentation with Gemini
 router.post('/:id/analyze', async (req, res) => {
   const { id } = req.params;
+  const userId = req.user.id;
   
-  const presentation = db.prepare('SELECT * FROM presentations WHERE id = ?').get(id);
+  const presentation = verifyPresentationOwnership(id, userId);
   if (!presentation) {
     return res.status(404).json({ error: 'Presentation not found' });
   }
@@ -241,7 +265,8 @@ Provide at least 5-10 pieces of timestamped feedback, more for longer presentati
 
 // Get presentation by ID
 router.get('/:id', (req, res) => {
-  const presentation = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
+  const userId = req.user.id;
+  const presentation = verifyPresentationOwnership(req.params.id, userId);
   if (!presentation) {
     return res.status(404).json({ error: 'Presentation not found' });
   }
@@ -250,7 +275,8 @@ router.get('/:id', (req, res) => {
 
 // Serve recording files
 router.get('/:id/video', async (req, res) => {
-  const presentation = db.prepare('SELECT video_path FROM presentations WHERE id = ?').get(req.params.id);
+  const userId = req.user.id;
+  const presentation = verifyPresentationOwnership(req.params.id, userId);
   if (!presentation?.video_path) {
     return res.status(404).json({ error: 'Video not found' });
   }
@@ -258,7 +284,8 @@ router.get('/:id/video', async (req, res) => {
 });
 
 router.get('/:id/audio', async (req, res) => {
-  const presentation = db.prepare('SELECT audio_path FROM presentations WHERE id = ?').get(req.params.id);
+  const userId = req.user.id;
+  const presentation = verifyPresentationOwnership(req.params.id, userId);
   if (!presentation?.audio_path) {
     return res.status(404).json({ error: 'Audio not found' });
   }

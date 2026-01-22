@@ -11,13 +11,19 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 router.post('/', async (req, res) => {
   const { sessionId, message } = req.body;
+  const userId = req.user.id;
 
   if (!sessionId || !message) {
     return res.status(400).json({ error: 'sessionId and message required' });
   }
 
-  // Get current session to find workspace and scratchpad
-  const currentSession = db.prepare('SELECT workspace_id, scratchpad FROM sessions WHERE id = ?').get(sessionId);
+  // Get current session to find workspace and scratchpad, verify ownership
+  const currentSession = db.prepare('SELECT workspace_id, scratchpad, user_id FROM sessions WHERE id = ?').get(sessionId);
+  
+  if (!currentSession || currentSession.user_id !== userId) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+  
   const workspaceId = currentSession?.workspace_id;
   const scratchpad = currentSession?.scratchpad;
 

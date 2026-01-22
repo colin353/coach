@@ -49,6 +49,48 @@ npm run build
 npm start
 ```
 
+## Authentication (Production)
+
+In production, the app requires Google OAuth authentication. Users must be whitelisted in `config/allowed-users.json`.
+
+### Setup Google OAuth
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Navigate to "APIs & Services" > "Credentials"
+4. Create an OAuth 2.0 Client ID (Web application)
+5. Add your callback URL: `https://your-domain.com/auth/google/callback`
+
+### Environment Variables (Production)
+
+```bash
+export GOOGLE_CLIENT_ID="your-client-id"
+export GOOGLE_CLIENT_SECRET="your-client-secret"
+export SESSION_SECRET="random-secret-string"  # Generate a secure random string
+export GOOGLE_CALLBACK_URL="https://your-domain.com/auth/google/callback"  # Optional, defaults to /auth/google/callback
+export NODE_ENV="production"
+export GITHUB_TOKEN=$(gh auth token)
+```
+
+### Managing User Access
+
+Edit `config/allowed-users.json` to add or remove authorized email addresses:
+
+```json
+{
+  "allowedEmails": [
+    "user@example.com",
+    "another@example.com"
+  ]
+}
+```
+
+The whitelist is hot-reloadable - changes take effect immediately without restarting the server.
+
+### Development Mode
+
+In development (`NODE_ENV !== 'production'`), authentication is bypassed and a simulated user (`dev@localhost`) is used.
+
 ## Tech Stack
 
 - **Frontend**: React, Vite, Tailwind CSS

@@ -78,4 +78,18 @@ try {
   db.exec('ALTER TABLE sessions ADD COLUMN scratchpad TEXT');
 } catch (e) {}
 
+// Add user_id columns for multi-user support
+try {
+  db.exec('ALTER TABLE workspaces ADD COLUMN user_id TEXT');
+} catch (e) {}
+
+try {
+  db.exec('ALTER TABLE sessions ADD COLUMN user_id TEXT');
+} catch (e) {}
+
+try {
+  db.exec('CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)');
+} catch (e) {}
+
 export default db;

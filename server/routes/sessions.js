@@ -8,6 +8,7 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 // Get all sessions (optionally filtered by workspace)
 router.get('/', (req, res) => {
   const { workspaceId } = req.query;
+  const userId = req.user.id;
 
   let query = `
     SELECT s.*, COUNT(m.id) as message_count
@@ -16,16 +17,16 @@ router.get('/', (req, res) => {
   `;
 
   if (workspaceId) {
-    query += ` WHERE s.workspace_id = ?`;
+    query += ` WHERE s.workspace_id = ? AND s.user_id = ?`;
   } else {
-    query += ` WHERE s.workspace_id IS NULL`;
+    query += ` WHERE s.workspace_id IS NULL AND s.user_id = ?`;
   }
 
   query += ` GROUP BY s.id ORDER BY s.started_at DESC`;
 
   const sessions = workspaceId
-    ? db.prepare(query).all(workspaceId)
-    : db.prepare(query).all();
+    ? db.prepare(query).all(workspaceId, userId)
+    : db.prepare(query).all(userId);
 
   res.json(sessions);
 });
@@ -35,8 +36,9 @@ router.post('/', (req, res) => {
   const id = uuid();
   const title = req.body.title || `Session ${new Date().toLocaleDateString()}`;
   const workspaceId = req.body.workspaceId || null;
+  const userId = req.user.id;
 
-  db.prepare('INSERT INTO sessions (id, title, workspace_id) VALUES (?, ?, ?)').run(id, title, workspaceId);
+  db.prepare('INSERT INTO sessions (id, title, workspace_id, user_id) VALUES (?, ?, ?, ?)').run(id, title, workspaceId, userId);
 
   const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id);
   res.json(session);
@@ -44,7 +46,8 @@ router.post('/', (req, res) => {
 
 // Get session with messages
 router.get('/:id', (req, res) => {
-  const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(req.params.id);
+  const userId = req.user.id;
+  const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
   if (!session) {
     return res.status(404).json({ error: 'Session not found' });
   }
@@ -58,7 +61,15 @@ router.get('/:id', (req, res) => {
 
 // Update session (title, summary, action_items)
 router.patch('/:id', (req, res) => {
+  const userId = req.user.id;
   const { title, summary, action_items, ended_at } = req.body;
+  
+  // Verify ownership
+  const existing = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+  if (!existing) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+  
   const updates = [];
   const values = [];
 
@@ -79,6 +90,13 @@ router.patch('/:id', (req, res) => {
 // Delete session and its messages/facts
 router.delete('/:id', (req, res) => {
   const { id } = req.params;
+  const userId = req.user.id;
+  
+  // Verify ownership
+  const existing = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(id, userId);
+  if (!existing) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
   
   // Delete associated facts and messages first
   db.prepare('DELETE FROM facts WHERE session_id = ?').run(id);
@@ -90,30 +108,34 @@ router.delete('/:id', (req, res) => {
 
 // Get recent sessions for context
 router.get('/:id/context', (req, res) => {
+  const userId = req.user.id;
   const recentSessions = db.prepare(`
     SELECT * FROM sessions 
-    WHERE id != ? AND summary IS NOT NULL
+    WHERE id != ? AND summary IS NOT NULL AND user_id = ?
     ORDER BY started_at DESC 
     LIMIT 5
-  `).all(req.params.id);
+  `).all(req.params.id, userId);
   res.json(recentSessions);
 });
 
 // Get all facts (for context in new sessions)
 router.get('/facts/all', (req, res) => {
+  const userId = req.user.id;
   const facts = db.prepare(`
     SELECT f.*, s.title as session_title
     FROM facts f
     JOIN sessions s ON s.id = f.session_id
+    WHERE s.user_id = ?
     ORDER BY f.created_at DESC
     LIMIT 50
-  `).all();
+  `).all(userId);
   res.json(facts);
 });
 
 // Complete a session - extract facts, generate title, and create summary
 router.post('/:id/complete', async (req, res) => {
-  const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(req.params.id);
+  const userId = req.user.id;
+  const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId);
   if (!session) {
     return res.status(404).json({ error: 'Session not found' });
   }

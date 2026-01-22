@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from './hooks/useSpeechSynthesis';
+import { useAuth } from './hooks/useAuth';
 import { ChatMessage } from './components/ChatMessage';
 import { SessionList } from './components/SessionList';
 import { VoiceButton } from './components/VoiceButton';
@@ -8,8 +9,12 @@ import { WorkspaceSelector } from './components/WorkspaceSelector';
 import { SessionSummary } from './components/SessionSummary';
 import { PresentationRecorder } from './components/PresentationRecorder';
 import { Scratchpad } from './components/Scratchpad';
+import { LoginPage } from './components/LoginPage';
+import { AccessDenied } from './components/AccessDenied';
 
 export default function App() {
+  const { user, loading: authLoading, error: authError, login, logout } = useAuth();
+  
   const [workspaces, setWorkspaces] = useState([]);
   const [currentWorkspace, setCurrentWorkspace] = useState(null);
   const [sessions, setSessions] = useState([]);
@@ -47,10 +52,12 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  // Load workspaces on mount
+  // Load workspaces on mount (only when authenticated)
   useEffect(() => {
-    fetchWorkspaces();
-  }, []);
+    if (user) {
+      fetchWorkspaces();
+    }
+  }, [user]);
 
   // Load sessions when workspace changes
   useEffect(() => {
@@ -291,10 +298,43 @@ export default function App() {
 
   const displayText = (pendingText + ' ' + interimText).trim();
 
+  // Auth loading state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-slate-400">Loading...</div>
+      </div>
+    );
+  }
+
+  // Access denied
+  if (authError?.type === 'access_denied') {
+    return <AccessDenied email={authError.email} onLogout={logout} />;
+  }
+
+  // Not authenticated
+  if (!user) {
+    return <LoginPage onLogin={login} />;
+  }
+
   return (
     <div className="h-screen flex">
       {/* Sidebar */}
       <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
+        {/* User info */}
+        <div className="p-3 border-b border-slate-700 flex items-center justify-between">
+          <span className="text-sm text-slate-400 truncate" title={user.email}>
+            {user.email}
+          </span>
+          <button
+            onClick={logout}
+            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+            title="Sign out"
+          >
+            Logout
+          </button>
+        </div>
+        
         {/* Workspace Selector */}
         <div className="p-3 border-b border-slate-700">
           <WorkspaceSelector
